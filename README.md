@@ -6,7 +6,7 @@ It retrieves all templates and stores them in individual XML files allowing you 
 ## Install
 Install the requirements:
 ```bash
-$ pip install -r requirements.txt
+$ pip3 install -r requirements.txt
 ```
 
 ## Usage

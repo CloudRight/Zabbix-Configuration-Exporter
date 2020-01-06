@@ -1,4 +1,4 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python3
 
 # The MIT License (MIT)
 #
@@ -29,14 +29,21 @@ import os
 import base64
 
 
-def is_base64(s):
+def isBase64(sb):
     try:
-        return base64.b64encode(base64.b64decode(s)) == s
+        if isinstance(sb, str):
+            # If there's any unicode here, an exception will be thrown and the function will return false
+            sb_bytes = bytes(sb, 'ascii')
+        elif isinstance(sb, bytes):
+            sb_bytes = sb
+        else:
+            raise ValueError("Argument must be string or bytes")
+        return base64.b64encode(base64.b64decode(sb_bytes)) == sb_bytes
     except Exception:
         return False
 
 
-def set_arguments():
+def setArguments():
     parser = argparse.ArgumentParser()
     parser.add_argument('--server',
                         '-s',
@@ -59,19 +66,22 @@ def set_arguments():
     if not args.zabbix_host or not args.zabbix_user or not args.zabbix_password:
         exit(parser.print_usage())
 
-    if is_base64(args.zabbix_user):
-        args.zabbix_user = base64.b64decode(args.zabbix_user).strip()
+    if isBase64(args.zabbix_user):
+        args.zabbix_user = base64.b64decode(args.zabbix_user).strip().decode('utf-8')
 
-    if is_base64(args.zabbix_password):
-        args.zabbix_password = base64.b64decode(args.zabbix_password).strip()
+    if isBase64(args.zabbix_password):
+        args.zabbix_password = base64.b64decode(args.zabbix_password).strip().decode('utf-8')
 
     return args
 
 
-def export_templates(url, user, password):
+def exportTemplates(url, user, password):
     try:
-        zapi = ZabbixAPI(url=url, user=user, password=password)
-    except Exception, e:
+        zapi = ZabbixAPI(server=url)
+        zapi.login(user=user, password=password)
+        print("Connected to Zabbix API Version %s" % zapi.api_version())
+
+    except Exception as e:
         print('Failed to connect with the Zabbix API. Please check your credentials.')
         print(str(e))
         exit(1)
@@ -98,5 +108,5 @@ def export_templates(url, user, password):
 
 
 if __name__ == "__main__":
-    args = set_arguments()
-    export_templates(args.zabbix_host, args.zabbix_user, args.zabbix_password)
+    args = setArguments()
+    exportTemplates(args.zabbix_host, args.zabbix_user, args.zabbix_password)

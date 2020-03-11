@@ -2,7 +2,7 @@
 
 # The MIT License (MIT)
 #
-# Copyright (c) 2018 Frank Klaassen
+# Copyright (c) 2018-2020 Frank Klaassen
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -28,6 +28,8 @@ import os
 import base64
 import sys
 import logging
+from xml.dom import minidom
+import simplejson
 
 
 def is_base64(sb):
@@ -71,13 +73,13 @@ def set_arguments():
                         )
     parser.add_argument('--type', '-t',
                         dest='export_type',
-                        help='Export this type of',
+                        help='Export this type of entities',
                         default='templates',
                         )
     parser.add_argument('--debug', '-d',
                         dest='debug',
-                        help='Enable debug mode',
-                        default=False,
+                        help='Enable debugging output',
+                        action='store_true'
                         )
 
     args = parser.parse_args()
@@ -174,13 +176,11 @@ def export_templates(args):
 def write_export(name, config, export_format='xml'):
     if config is not None:
         if export_format == 'xml':
-            from xml.dom import minidom
             xmlstr = minidom.parseString(config).toprettyxml(indent="   ")
             print('Writing %s.xml' % name)
             with open("%s.xml" % name, "w") as f:
                 f.write(xmlstr)
         elif export_format == 'json':
-            import simplejson
             print('Writing %s.json' % name)
             with open("%s.json" % name, "w") as f:
                 f.write(simplejson.dumps(simplejson.loads(config), indent=4, sort_keys=True))
@@ -196,4 +196,3 @@ def normalize(input):
 if __name__ == "__main__":
     args = set_arguments()
     export_templates(args)
-

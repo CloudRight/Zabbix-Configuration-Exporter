@@ -1,1 +1,2 @@
 pyzabbix==0.7.5
+simplejson==3.17.0

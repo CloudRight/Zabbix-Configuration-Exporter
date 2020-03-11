@@ -23,7 +23,6 @@
 # THE SOFTWARE.
 
 from pyzabbix import ZabbixAPI
-from xml.dom import minidom
 import argparse
 import os
 import base64
@@ -61,6 +60,13 @@ def setArguments():
                         help='Zabbix password for connecting to the API',
                         default=os.environ.get('ZABBIX_PASS', None),
                         )
+    # Optional arguments
+    parser.add_argument('--format', '-f',
+                        dest='export_format',
+                        help='Export the templates as this format',
+                        default='xml',
+                        )
+
     args = parser.parse_args()
 
     if not args.zabbix_host or not args.zabbix_user or not args.zabbix_password:
@@ -75,7 +81,7 @@ def setArguments():
     return args
 
 
-def exportTemplates(url, user, password):
+def exportTemplates(url, user, password, export_format='xml'):
     try:
         zapi = ZabbixAPI(server=url)
         zapi.login(user=user, password=password)
@@ -95,18 +101,25 @@ def exportTemplates(url, user, password):
         name = t['name'].replace(' ', '_')
 
         config = zapi.configuration.export(
-            format='xml',
+            format=export_format,
             options={
                 'templates': [template_id]
             }
         )
 
         print('Exporting %s...' % name)
-        xmlstr = minidom.parseString(config).toprettyxml(indent="   ")
-        with open("%s.xml" % name, "w") as f:
-            f.write(xmlstr)
+
+        if export_format == 'xml':
+            from xml.dom import minidom
+            xmlstr = minidom.parseString(config).toprettyxml(indent="   ")
+            with open("%s.xml" % name, "w") as f:
+                f.write(xmlstr)
+        elif export_format == 'json':
+            import simplejson
+            with open("%s.json" % name, "w") as f:
+                f.write(simplejson.dumps(simplejson.loads(config), indent=4, sort_keys=True))
 
 
 if __name__ == "__main__":
     args = setArguments()
-    exportTemplates(args.zabbix_host, args.zabbix_user, args.zabbix_password)
+    exportTemplates(args.zabbix_host, args.zabbix_user, args.zabbix_password, args.export_format)

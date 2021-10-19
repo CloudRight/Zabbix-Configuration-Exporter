@@ -2,7 +2,7 @@
 
 # The MIT License (MIT)
 #
-# Copyright (c) 2018-2020 Frank Klaassen
+# Copyright (c) 2018-2021 Frank Klaassen
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -25,174 +25,246 @@
 from pyzabbix import ZabbixAPI
 import argparse
 import os
-import base64
 import sys
 import logging
-from xml.dom import minidom
-import simplejson
+import re
 
-
-def is_base64(sb):
-    try:
-        if isinstance(sb, str):
-            # If there's any unicode here, an exception will be thrown and the function will return false
-            sb_bytes = bytes(sb, 'ascii')
-        elif isinstance(sb, bytes):
-            sb_bytes = sb
-        else:
-            raise ValueError("Argument must be string or bytes")
-        return base64.b64encode(base64.b64decode(sb_bytes)) == sb_bytes
-    except Exception:
-        return False
+"""
+Handle arguments
+"""
 
 
 def set_arguments():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--server',
-                        '-s',
-                        dest='zabbix_host',
-                        help='Zabbix URL',
-                        default=os.environ.get('ZABBIX_HOST', None),
-                        )
-    parser.add_argument('--username', '-u',
-                        dest='zabbix_user',
-                        help='Zabbix user to connect with the API',
-                        default=os.environ.get('ZABBIX_USER', None),
-                        )
-    parser.add_argument('--password', '-p',
-                        dest='zabbix_password',
-                        help='Zabbix password for connecting to the API',
-                        default=os.environ.get('ZABBIX_PASS', None),
-                        )
+    parser.add_argument(
+        "--server",
+        "-s",
+        dest="zabbix_host",
+        help="Zabbix URL",
+        default=os.environ.get("ZABBIX_HOST", None),
+    )
+    parser.add_argument(
+        "--token",
+        dest="zabbix_api_token",
+        help="Zabbix API token",
+        default=os.environ.get("ZABBIX_API_TOKEN", None),
+    )
 
     # Optional arguments
-    parser.add_argument('--format', '-f',
-                        dest='export_format',
-                        help='Export the templates as XML or JSON',
-                        default='xml',
-                        )
-    parser.add_argument('--type', '-t',
-                        dest='export_type',
-                        help='Export this type of entities',
-                        default='templates',
-                        )
-    parser.add_argument('--debug', '-d',
-                        dest='debug',
-                        help='Enable debugging output',
-                        action='store_true'
-                        )
+    parser.add_argument(
+        "--format",
+        "-f",
+        dest="export_format",
+        help="Format to use to store the configuration as.",
+        choices=["xml", "json", "yaml"],
+        default="yaml",
+    )
+    parser.add_argument(
+        "--type",
+        "-t",
+        dest="export_type",
+        help="Export this type of entities.",
+        choices=["templates", "mediatypes", "hosts", "hostgroups", "maps", "images"],
+        default="templates",
+    )
+    parser.add_argument(
+        "--debug",
+        "-d",
+        dest="debug",
+        help="Enable debugging output",
+        action="store_true",
+    )
 
     args = parser.parse_args()
 
-    if not args.zabbix_host or not args.zabbix_user or not args.zabbix_password:
+    if not args.zabbix_host or not args.zabbix_api_token:
         exit(parser.print_usage())
-
-    if is_base64(args.zabbix_user):
-        args.zabbix_user = base64.b64decode(args.zabbix_user).strip().decode('utf-8')
-
-    if is_base64(args.zabbix_password):
-        args.zabbix_password = base64.b64decode(args.zabbix_password).strip().decode('utf-8')
 
     return args
 
 
-def export_templates(args):
+"""
+Export templates
+"""
+
+
+def export_templates(zapi):
+    templates = zapi.template.get(output=["name", "id"])
+
+    for t in templates:
+        template_id = int(t["templateid"])
+        name = normalize(t["name"])
+        print("Exporting template %s..." % name)
+
+        config = zapi.configuration.export(
+            format=args.export_format,
+            prettyprint=True,
+            options={"templates": [template_id]},
+        )
+        write_export(name, config, args.export_format)
+
+
+"""
+Export mediatypes
+"""
+
+
+def export_mediaTypes(zapi):
+    mediatypes = zapi.mediatype.get(output=["mediatypeid", "name"])
+
+    for t in mediatypes:
+        mediatype_id = int(t["mediatypeid"])
+        name = "MediaType_" + normalize(t["name"])
+        print("Exporting media type %s..." % name)
+
+        config = zapi.configuration.export(
+            format=args.export_format,
+            prettyprint=True,
+            options={"mediaTypes": [mediatype_id]},
+        )
+        write_export(name, config, args.export_format)
+
+
+"""
+Export hosts
+"""
+
+
+def export_hosts(zapi):
+    hosts = zapi.host.get(output=["hostid", "name"])
+
+    for t in hosts:
+        host_id = int(t["hostid"])
+        name = "Host_" + re.sub(r"[^a-zA-Z0-9\-\_\.]+", "_", t["name"])
+        print("Exporting host %s..." % name)
+
+        config = zapi.configuration.export(
+            format=args.export_format, prettyprint=True, options={"hosts": [host_id]}
+        )
+        write_export(name, config, args.export_format)
+
+
+"""
+Export host groups
+"""
+
+
+def export_hosts_groups(zapi):
+    host_groups = zapi.hostgroup.get(output=["groupid", "name"])
+
+    for t in host_groups:
+        hostgroup_id = int(t["groupid"])
+        name = "HostGroup_" + re.sub(r"[^a-zA-Z0-9\-\_\.]+", "_", t["name"])
+        print("Exporting hostgroup %s..." % name)
+
+        config = zapi.configuration.export(
+            format=args.export_format,
+            prettyprint=True,
+            options={"groups": [hostgroup_id]},
+        )
+        write_export(name, config, args.export_format)
+
+
+"""
+Export maps
+"""
+
+
+def export_maps(zapi):
+    maps = zapi.map.get(output=["sysmapid", "name"])
+
+    for t in maps:
+        map_id = int(t["sysmapid"])
+        name = "Map_" + normalize(t["name"])
+        print("Exporting map %s..." % name)
+
+        config = zapi.configuration.export(
+            format=args.export_format,
+            prettyprint=True,
+            options={"maps": [map_id]},
+        )
+        write_export(name, config, args.export_format)
+
+
+"""
+Export images
+"""
+
+
+def export_images(zapi):
+    images = zapi.image.get(output=["imageid", "name"])
+
+    for t in images:
+        image_id = int(t["imageid"])
+        name = "Image_" + normalize(t["name"])
+        print("Exporting image %s..." % name)
+
+        config = zapi.configuration.export(
+            format=args.export_format,
+            prettyprint=True,
+            options={"images": [image_id]},
+        )
+        write_export(name, config, args.export_format)
+
+
+"""
+Write the output to a file
+"""
+
+
+def write_export(name, config, export_format="yaml"):
+    if config is not None:
+        print("Writing %s.%s" % (name, export_format))
+        with open("%s.%s" % (name, export_format), "w") as f:
+            f.write(config)
+
+
+"""
+Normalize the template name to generate a proper filename
+"""
+
+
+def normalize(input):
+    return re.sub(r"[^a-zA-Z0-9\-\_]+", "_", input)
+
+
+"""
+Main function
+"""
+
+
+def exporter(args):
     try:
         zapi = ZabbixAPI(server=args.zabbix_host)
-        zapi.login(user=args.zabbix_user, password=args.zabbix_password)
+        zapi.login(api_token=args.zabbix_api_token)
         print("Connected to Zabbix API Version %s" % zapi.api_version())
 
     except Exception as e:
-        print('Failed to connect with the Zabbix API. Please check your credentials.')
+        print("Failed to connect with the Zabbix API. Please check your credentials.")
         print(str(e))
         exit(1)
 
     if args.debug is True:
         stream = logging.StreamHandler(sys.stdout)
         stream.setLevel(logging.DEBUG)
-        log = logging.getLogger('pyzabbix')
+        log = logging.getLogger("pyzabbix")
         log.addHandler(stream)
         log.setLevel(logging.DEBUG)
 
-    # Export Templates (Triggers, items etc)
-    if args.export_type == 'templates':
-        templates = zapi.template.get(
-            output=['name', 'id']
-        )
-
-        for t in templates:
-            template_id = t['templateid']
-            name = normalize(t['name'])
-            print('Exporting template %s...' % name)
-
-            config = zapi.configuration.export(
-                format=args.export_format,
-                options={
-                    'templates': [template_id]
-                }
-            )
-            write_export(name, config, args.export_format)
-
-    # Export Media Types
-    elif args.export_type == 'mediatypes':
-        mediatypes = zapi.mediatype.get(
-            output=['mediatypeid', 'name']
-        )
-
-        for t in mediatypes:
-            mediatype_id = t['mediatypeid']
-            name = 'Media_' + normalize(t['name'])
-            print('Exporting media type %s...' % name)
-
-            config = zapi.configuration.export(
-                format=args.export_format,
-                options={
-                    'mediaTypes': [mediatype_id]
-                }
-            )
-            write_export(name, config, args.export_format)
-
-    # Export ValueMaps
-    elif args.export_type == 'valuemaps':
-        valuemaps = zapi.valuemap.get(
-            output=['valuemapid', 'name']
-        )
-        print(valuemaps)
-
-        for t in valuemaps:
-            valuemap_id = t['valuemapid']
-            name = 'Valuemap_' + normalize(t['name'])
-            print('Exporting valuemap %s...' % name)
-
-            config = zapi.configuration.export(
-                format=args.export_format,
-                options={
-                    'valueMaps': [valuemap_id]
-                }
-            )
-            write_export(name, config, args.export_format)
-
-
-def write_export(name, config, export_format='xml'):
-    if config is not None:
-        if export_format == 'xml':
-            xmlstr = minidom.parseString(config).toprettyxml(indent="   ")
-            print('Writing %s.xml' % name)
-            with open("%s.xml" % name, "w") as f:
-                f.write(xmlstr)
-        elif export_format == 'json':
-            print('Writing %s.json' % name)
-            with open("%s.json" % name, "w") as f:
-                f.write(simplejson.dumps(simplejson.loads(config), indent=4, sort_keys=True))
-
-
-def normalize(input):
-    input = input.replace(' ', '_')
-    input = input.replace('/', '_')
-    input = input.replace(':', '_')
-    return input
+    if args.export_type == "templates":
+        export_templates(zapi)
+    elif args.export_type == "mediatypes":
+        export_mediaTypes(zapi)
+    elif args.export_type == "hosts":
+        export_hosts(zapi)
+    elif args.export_type == "hostgroups":
+        export_hosts_groups(zapi)
+    elif args.export_type == "maps":
+        export_maps(zapi)
+    elif args.export_type == "images":
+        export_images(zapi)
 
 
 if __name__ == "__main__":
     args = set_arguments()
-    export_templates(args)
+    exporter(args)

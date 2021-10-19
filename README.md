@@ -1,4 +1,4 @@
-# Zabbix Configuration Exporter
+# Zabbix Configuration Exporter  [![Latest Release](https://img.shields.io/github/release/CloudRight/Zabbix-Configuration-Exporter.svg)](https://github.com/CloudRight/Zabbix-Configuration-Exporter/releases/latest)
 
 This tool connects to the Zabbix API and retrieves configuration and stores this in individual files, allowing you to re-use these templates and make backups of them (e.g. by adding them to version control).
 

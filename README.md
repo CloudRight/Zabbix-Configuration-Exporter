@@ -55,4 +55,4 @@ export ZABBIX_API_TOKEN=your-token
 * Exporting auto-discovered hosts results in an empty file, because the Zabbix API does not provide this information.
 
 ## License
-The MIT License (MIT). Please see the [license file](./blob/master/LICENSE) for more information.
+The MIT License (MIT). Please see the [license file](./LICENSE) for more information.
